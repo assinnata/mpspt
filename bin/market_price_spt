@@ -5,15 +5,13 @@ from market_price_spt.api.server import startAPIServer
 from market_price_spt.core.aggregator import aggregatorConsumerLoop
 from market_price_spt.core.argparser import loadArgs
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = loadArgs()
     if args.mode == "adapter" and type(args.adapter) is str:
         startAdapterWebsocket(args.adapter)
-    
+
     if args.mode == "aggregator":
         aggregatorConsumerLoop(topics=["gemini"])
-        
+
     if args.mode == "server":
         startAPIServer().run()
-        
-    

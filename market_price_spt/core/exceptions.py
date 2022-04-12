@@ -1,3 +1,2 @@
-
 class AggregatorException(Exception):
     pass

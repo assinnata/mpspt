@@ -1,5 +1,5 @@
-
 import argparse
+
 
 def loadArgs():
     parser = argparse.ArgumentParser()
