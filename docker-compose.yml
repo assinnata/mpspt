@@ -1,0 +1,148 @@
+services:
+  gemini:
+    build: .
+    entrypoint: market_price_spt --mode adapter --adapter gemini
+    container_name: gemini
+    restart: "on-failure"
+    depends_on:
+      - kafka101
+    env_file:
+      - .env
+
+  aggregator:
+    build: .
+    entrypoint: market_price_spt --mode aggregator
+    container_name: aggregator
+    restart: "on-failure"
+    depends_on:
+      - kafka101
+    env_file:
+      - .env
+  
+  postgres:
+    image: postgres:14.2
+    restart: always
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: password
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+
+  grafana:
+    image: "grafana/grafana:${GRAFANA_VERSION}"
+    restart: always
+    ports:
+     - "3000:3000"
+    environment:
+      GF_PATHS_DATA : /var/lib/grafana
+      GF_SECURITY_ADMIN_PASSWORD : kafka
+    volumes:
+     - ./volumes/grafana/provisioning:/etc/grafana/provisioning
+     - ./volumes/grafana/dashboards:/var/lib/grafana/dashboards
+    container_name: grafana
+    depends_on:
+     - prometheus
+
+  prometheus:
+    image: "prom/prometheus:${PROMETHEUS_VERSION}"
+    restart: always
+    ports:
+     - "9090:9090"
+    volumes:
+     - ./volumes/etc/prometheus:/etc/prometheus
+    command: "--config.file=/etc/prometheus/prometheus.yml"
+    container_name: prometheus
+
+  jmx-kafka101:
+    image: "sscaling/jmx-prometheus-exporter"
+    restart: always
+    ports:
+     - "5556:5556"
+    environment:
+     CONFIG_YML : "/etc/jmx_exporter/config.yml"
+    volumes:
+     - ./volumes/etc/jmx_exporter:/etc/jmx_exporter
+    container_name: jmx-kafka101
+    depends_on:
+     - kafka101
+
+  zk1:
+    image: "confluentinc/cp-zookeeper:${CONFLUENT_VERSION}"
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+     - "2181:2181"
+    container_name: zookeeper1
+
+  kafka101:
+    image:  "confluentinc/cp-kafka:${CONFLUENT_VERSION}"
+    restart: always
+    depends_on:
+      - zk1
+    ports:
+      - "9092:9092"
+      - "9991:9991"
+    container_name: kafka101
+    environment:
+      KAFKA_BROKER_ID: 101
+      KAFKA_JMX_PORT: 9991
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka101:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_MS: 60000
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka101:29092
+      CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: zookeeper1:2181
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: 'false'
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS}
+
+  # zoo:
+  #   image: confluentinc/cp-zookeeper:7.0.1
+  #   hostname: zoo
+  #   container_name: zoo
+  #   ports:
+  #     - "2181:2181"
+  #   environment:
+  #     ZOOKEEPER_CLIENT_PORT: 2181
+  #     ZOOKEEPER_SERVER_ID: 1
+  #     ZOOKEEPER_SERVERS: zoo:2888:3888
+  #   volumes: 
+  #     - ./tmp/zoo/data:/var/lib/zookeeper/data
+  #     - ./tmp/zoo/log:/var/lib/zookeeper/log
+
+  # kafka:
+  #   image: confluentinc/cp-kafka:7.0.1
+  #   hostname: kafka
+  #   container_name: kafka
+  #   ports:
+  #     - "9092:9092"
+  #     - "9999:9999"
+  #   environment:
+  #     KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+  #     KAFKA_ZOOKEEPER_CONNECT: "zoo:2181"
+  #     KAFKA_BROKER_ID: 1
+  #     KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  #     KAFKA_JMX_PORT: 9999
+  #     KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
+  #     KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
+  #     KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+  #   depends_on:
+  #     - zoo
+  #   volumes: 
+  #     - ./tmp/broker/data:/var/lib/kafka/data

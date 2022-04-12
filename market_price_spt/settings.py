@@ -1,0 +1,3 @@
+VERSION = "0.1.0"
+KAFKA_HOST = "kafka101"
+KAFKA_PORT = "29092"

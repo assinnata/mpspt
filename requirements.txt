@@ -1,0 +1,6 @@
+flask
+flask_restful
+websocket-client
+rel
+argparse
+kafka-python
